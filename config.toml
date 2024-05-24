@@ -1,4 +1,4 @@
-baseURL = 'https://example.org/'
+baseURL = 'https://main--beamish-maamoul-351b9d.netlify.app/'
 #baseURL = "https://hugo-paper.vercel.app/"
 # title = "Hugo Themes"
 author = "Steve Francia"
