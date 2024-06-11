@@ -1,7 +1,7 @@
 +++
 author = "febin.stephen"
 title = "Journey of a C program."
-date = "2024-06-10"
+date = "2020-06-10"
 description = "My coding lessons."
 tags = [
     "c",

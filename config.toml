@@ -1,4 +1,4 @@
-baseURL = 'https://main--beamish-maamoul-351b9d.netlify.app/'
+baseURL = 'https://beamish-maamoul-351b9d.netlify.app/'
 languageCode = 'en-us'
 title = "Febin's coding lessons."
 theme = 'typo'
