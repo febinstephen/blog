@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="en-us"
+  dir="ltr">
+
+  <head><script src="/livereload.js?mindelay=10&amp;v=2&amp;port=1313&amp;path=livereload" data-no-instant defer></script>
+    <meta charset="utf-8">
+<meta name="viewport" content="width=device-width"><meta name="description" content="My coding lessons." />
+
+<title>
+    
+    An async SQS consumer in Python | Febin&#39;s coding lessons.
+    
+</title>
+
+
+
+
+
+
+
+<link rel="stylesheet" href="/assets/combined.min.f69b4a5b91a9bc416804eda1f19d04210551b843d47318bf1913d7edce1504fb.css" media="all">
+
+
+
+  </head>
+
+  
+
+  
+  
+  
+
+  <body class="auto">
+
+    <div class="content">
+      <header>
+        
+
+<div class="header">
+    <h1 class="header-title">Febin&#39;s coding lessons.</h1>
+
+    <div class="flex">
+        
+
+        
+        
+        <p class="small ">
+            <a href="/">
+                /home
+            </a>
+        </p>
+        
+        <p class="small ">
+            <a href="/posts">
+                /posts
+            </a>
+        </p>
+        
+        <p class="small ">
+            <a href="/about">
+                /about
+            </a>
+        </p>
+        
+        
+    </div>
+
+</div>
+      </header>
+
+      <main class="main">
+        
+
+
+
+
+<div class="breadcrumbs">
+    
+    <a href="/"></a>
+    <span class="breadcrumbs-separator"> > </span>
+    
+    <a href="/posts/">Posts</a>
+    <span class="breadcrumbs-separator"> > </span>
+    
+    <a class="breadcrumbs-current" href="/posts/sqs/">An async SQS consumer in Python</a>
+</div>
+
+
+<div >
+
+  <div class="single-intro-container">
+
+    
+
+    <h1 class="single-title">An async SQS consumer in Python</h1>
+    
+
+    
+
+    <p class="single-readtime">
+      
+      
+      
+      <time datetime="2023-06-10T00:00:00&#43;00:00">June 10, 2023</time>
+      
+
+      
+    </p>
+
+  </div>
+
+  
+
+  
+
+  
+
+  
+
+  <div class="single-content">
+    <p>Simple Queue Service (SQS) is a message queue service provided by AWS.</p>
+<p>SQS works by the push and poll model. It helps applications implement decoupling and is highly scalable. We can choose between a standard queue or FIFO queue based on your use-cases. Both of them comes with unique features. AWS allows unlimited queues and messages in any region. Each message payload can be a maximum size of 256 KB of text in any format and each 64 KB is billed as 1 request. We can also sent, recieve and delete messages in batches of upto 10 messages or 256 KB. With long polling enabled the queue waits for a given time when it is empty before sending new messages, this can minimize cost while recieving new messages as quickly as possible. The maximum reention period we can set for a message is 14 days. With message locking functionality SQS ensures that each message is consumed only once. The messages are encrypted before storing into the queue. Unprocessed messages can be moved to a dead letter queue, developers can inspect DLQ to understand why they are not processed and once remediated they can move them back to original queue.</p>
+<table>
+<thead>
+<tr>
+<th>Standard</th>
+<th>FIFO</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Unlimited throughput: supports unlimited transactions per second per API Action</td>
+<td>By default FIFO supports 3000 messages per second with batching and 300 messages per second without batching</td>
+</tr>
+<tr>
+<td>At-least-once-delivery</td>
+<td>Exactly-once processing</td>
+</tr>
+<tr>
+<td>Best-Effort Ordering</td>
+<td>First-in-First-out delivery</td>
+</tr>
+<tr>
+<td>At-least-once-delivery</td>
+<td>Exactly-once processing</td>
+</tr>
+<tr>
+<td>Most suited for applications that can handle unordered and multiple message delivery</td>
+<td>Most suited for applications where order of messages are critical and the can&rsquo;t tolerate the duplicates</td>
+</tr>
+</tbody>
+</table>
+<p>SQS can be used with many other AWS services to make your distributed applications more scalable and reliable. There are many design patterns to leverage SQS for scalability and reliability in your application.</p>
+<p>In this example I used <strong>localstack</strong> to setup an aws environment in local machine and created an sqs queue. You can check the following link to learn how to install localstack and provision aws resources locally <a href="https://docs.localstack.cloud/getting-started/">Getting started</a>. With localstack you do not need to create an aws account nor provision any resources and worry about the billitng. It reduces aws spend and remove the complexity of maintaining multiple aws dev accounts.</p>
+<p>The following script will start running two consume_messages tasks concurrently receiving and processing messages from the SQS queue. <strong>aiobotocore</strong> is an async client for amazon services using botocore and aiohttp/asyncio which is used here as the context manager for accessing and processing the queue. The secret and access keys values passed in the create_client function does not need to be your original keys, it can be any dummy values.</p>
+<pre tabindex="0"><code>
+import asyncio
+import json
+import sys
+import logging
+
+import botocore.exceptions
+import pydantic
+from aiobotocore.session import get_session
+
+from sqs_consumer_project.setup import setup_logging
+
+
+async def consume_messages(queue_name: str, shutdown_signal: asyncio.Event):
+    async with get_session().create_client(
+        &#34;sqs&#34;,
+        region_name=&#34;us-east-1&#34;,
+        endpoint_url=&#34;http://localhost:4566&#34;,
+        aws_access_key_id=&#34;test&#34;,
+        aws_secret_access_key=&#34;test&#34;,
+    ) as client:
+        try:
+            get_url_response = await client.get_queue_url(QueueName=queue_name)
+        except botocore.exceptions.ClientError as err:
+            if err.response[&#34;Error&#34;][&#34;Code&#34;] == &#34;AWS.SimpleQueueService.NonExistentQueue&#34;:
+                logging.error(f&#34;Queue {queue_name} does not exist&#34;)
+                sys.exit(1)
+            else:
+                raise
+
+        queue_url = get_url_response[&#34;QueueUrl&#34;]
+
+        while not shutdown_signal.is_set():
+            logging.info(&#34;Polling for messages&#34;)
+            try:
+                receive_message_response = await client.receive_message(
+                    QueueUrl=queue_url,
+                    MaxNumberOfMessages=1,
+                    WaitTimeSeconds=2,
+                )
+
+                if &#34;Messages&#34; in receive_message_response:
+                    logging.info(
+                        &#34;receive_messages got messages&#34;,
+                        extra={&#34;message_count&#34;: len(receive_message_response[&#34;Messages&#34;])},
+                    )
+                    for msg in receive_message_response[&#34;Messages&#34;]:
+                        message_id = msg[&#34;MessageId&#34;]
+                        message_body = msg[&#34;Body&#34;]
+                        successfully_processed = await message_processor(message_id, message_body)
+
+                        if successfully_processed:
+                            # Need to remove msg from queue or else it&#39;ll reappear, you could see this by
+                            # checking ApproximateNumberOfMessages and ApproximateNumberOfMessagesNotVisible
+                            # in the queue.
+                            await client.delete_message(
+                                QueueUrl=queue_url,
+                                ReceiptHandle=msg[&#34;ReceiptHandle&#34;],
+                            )
+                        else:
+                            logging.error(&#34;Failed to process message&#34;, extra={&#34;message_id&#34;: message_id})
+                else:
+                    logging.debug(&#34;No messages in queue&#34;)
+            except asyncio.CancelledError:
+                logging.error(&#34;Cancel Error&#34;)
+                break
+
+        logging.info(&#34;Finished&#34;)
+
+async def main():
+    setup_logging()
+
+    queue_name = &#34;my-queue2&#34;
+    consumer_count = 2
+    shutdown_signal = asyncio.Event()
+    consumers = [consume_messages(queue_name, shutdown_signal) for _ in range(consumer_count)]
+    await asyncio.gather(*consumers)
+
+
+if __name__ == &#34;__main__&#34;:
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        logging.info(&#34;Script interrupted by user&#34;)
+</code></pre><p>After receiving each message you can use it to perform your specific actions like sending user notifications or update the database. The <code>message_processor</code> and <code>do_work</code> functions does not do anything complex logic here except validating the message format and log the details, but you should modify them based on your use-case.</p>
+<pre tabindex="0"><code>
+async def message_processor(message_id: str, message_body: str) -&gt; bool:
+    logging.info(&#34;Starting MessageId processing&#34;, extra={&#34;message_id&#34;: message_id})
+    try:
+        message_dict = json.loads(message_body)
+        logging.info(&#34;pydantic model&#34;, extra={&#34;sqs_message&#34;: message_dict})
+    except pydantic.ValidationError as e:
+        logging.error(&#34;Invalid message format&#34;, extra={&#34;error&#34;: e})
+        return False
+
+    return await do_work(message_dict)
+
+
+async def do_work(message) -&gt; bool:
+    logging.info(&#34;Started work&#34;, extra={&#34;body&#34;: message})
+
+    logging.info(
+        &#34;Completed work&#34;,
+        extra={&#34;body&#34;: message}
+    )
+    return True
+</code></pre>
+    
+  </div>
+
+  
+  <div class="back-to-top">
+    <a href="#top">
+      back to top
+    </a>
+  </div>
+  
+
+</div>
+
+
+      </main>
+    </div>
+
+    <footer>
+      <p>Powered by
+    <a href="https://gohugo.io/">Hugo</a>
+    and
+    <a href="https://github.com/tomfran/typo">tomfran/typo</a>
+</p>
+
+
+    </footer>
+
+  </body>
+
+  <script>
+
+  function isAuto() {
+    return document.body.classList.contains("auto");
+  }
+
+  function setTheme() {
+    if (!isAuto()) {
+      return
+    }
+
+    document.body.classList.remove("auto");
+    let cls = "light";
+    if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+      cls = "dark";
+    }
+
+    document.body.classList.add(cls);
+  }
+
+  function invertBody() {
+    document.body.classList.toggle("dark");
+    document.body.classList.toggle("light");
+  }
+
+  if (isAuto()) {
+    window.matchMedia('(prefers-color-scheme: dark)').addListener(invertBody);
+  }
+
+  setTheme();
+
+</script>
+
+</html>
