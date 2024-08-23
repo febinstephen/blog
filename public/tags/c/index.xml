@@ -6,14 +6,14 @@
     <description>Recent content in C on Febin&#39;s coding lessons.</description>
     <generator>Hugo</generator>
     <language>en-us</language>
-    <lastBuildDate>Mon, 10 Jun 2024 00:00:00 +0000</lastBuildDate>
+    <lastBuildDate>Wed, 10 Jun 2020 00:00:00 +0000</lastBuildDate>
     <atom:link href="http://localhost:1313/tags/c/index.xml" rel="self" type="application/rss+xml" />
     <item>
       <title>Journey of a C program.</title>
       <link>http://localhost:1313/posts/soucrce-c/</link>
-      <pubDate>Mon, 10 Jun 2024 00:00:00 +0000</pubDate>
+      <pubDate>Wed, 10 Jun 2020 00:00:00 +0000</pubDate>
       <guid>http://localhost:1313/posts/soucrce-c/</guid>
-      <description>&lt;p&gt;Here is a piece of note i prepared as part of my herculean C-learning process.&lt;/p&gt;</description>
+      <description>&lt;p&gt;Here is a piece of note I prepared as part of the C-learning process.&lt;/p&gt;</description>
     </item>
   </channel>
 </rss>
